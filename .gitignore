@@ -39,3 +39,7 @@ groups/*
 .nanoclaw/
 
 agents-sdk-docs
+
+# Whisper artifacts
+container/models/
+container/whisper-cli
