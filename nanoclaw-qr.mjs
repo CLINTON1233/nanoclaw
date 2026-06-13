@@ -45,7 +45,7 @@ const MIME = {
 
 const logger = {
   level: 'silent', child: () => logger,
-  trace() {}, debug() {}, info() {}, warn() {}, error() {}, fatal() {},
+  trace() { }, debug() { }, info() { }, warn() { }, error() { }, fatal() { },
 }
 
 const state = { phase: 'starting', qr: null, error: null }
@@ -58,7 +58,7 @@ async function connect() {
   const { state: authState, saveCreds } = await useMultiFileAuthState(AUTH_DIR)
 
   let version
-  try { ({ version } = await fetchLatestBaileysVersion()) } catch {}
+  try { ({ version } = await fetchLatestBaileysVersion()) } catch { }
 
   const sock = makeWASocket({
     version, auth: authState, logger,
@@ -90,13 +90,18 @@ async function connect() {
         handedOff = true
         console.log('  Menyerahkan sesi ke NanoClaw (otomatis)...')
         setTimeout(async () => {
-          try { sock.end(undefined) } catch {}
+          try { sock.end(undefined) } catch { }
           await sleep(3000)
           console.log('  Menjalankan NanoClaw...')
-          spawnSync('systemctl', ['--user', 'start', SERVICE], { stdio: 'inherit' })
+          spawnSync('systemctl', ['--user', 'start', SERVICE], {
+            stdio: 'inherit'
+          })
+
           console.log('  NanoClaw berjalan. Halaman QR ditutup sebentar lagi.')
+          // await sleep(8000)
+          // process.exit(0)
           await sleep(8000)
-          process.exit(0)
+          console.log('NanoClaw berjalan')
         }, 3000)
       } else {
         console.log('  (mode manual) Tekan Ctrl+C, lalu jalankan NanoClaw.\n')
@@ -104,10 +109,14 @@ async function connect() {
     }
 
     if (connection === 'close') {
-      if (handedOff) return
+      if (handedOff) {
+        state.phase = 'connected'
+        return
+      }
       const code = lastDisconnect?.error?.output?.statusCode
+
       if (code === DisconnectReason.loggedOut) {
-        try { await rm(AUTH_DIR, { recursive: true, force: true }) } catch {}
+        try { await rm(AUTH_DIR, { recursive: true, force: true }) } catch { }
         state.phase = 'starting'
         state.qr = null
         if (attempts < 20) { attempts++; setTimeout(() => connect().catch(onFatal), 1500) }
@@ -387,34 +396,34 @@ function serveLogo(res) {
 
 createServer((req, res) => {
   const url = req.url
-  
+
   // Handle base path + logo
-  if (url === `${BASE_PATH}/logo`) { 
-    serveLogo(res); 
-    return 
+  if (url === `${BASE_PATH}/logo`) {
+    serveLogo(res);
+    return
   }
-  
+
   // Handle base path + qr endpoint
   if (url === `${BASE_PATH}/qr`) {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
     res.end(JSON.stringify({ phase: state.phase, qr: state.qr, error: state.error }))
     return
   }
-  
+
   // Handle base path exactly
   if (url === BASE_PATH || url === `${BASE_PATH}/`) {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
     res.end(PAGE)
     return
   }
-  
+
   // Handle redirect from root to base path
   if (url === '/' || url === '') {
     res.writeHead(302, { 'Location': BASE_PATH })
     res.end()
     return
   }
-  
+
   // 404 for other paths
   res.writeHead(404, { 'Content-Type': 'text/plain' })
   res.end('Not Found')
