@@ -701,26 +701,6 @@ registerChannelAdapter('whatsapp', {
             // Download media attachments (images, video, audio, documents)
             const attachments = await downloadInboundMedia(msg, normalized);
 
-            // Whisper transcription for audio messages
-            for (const att of attachments) {
-              if (att.type === 'audio' && process.env.WHISPER_BINARY && process.env.WHISPER_MODEL) {
-                try {
-                  const { execSync } = await import('child_process');
-                  const fullPath = path.join(DATA_DIR, 'attachments', att.name);
-                  const wavPath = fullPath.replace(/\.[^.]+$/, '.wav');
-                  execSync(`ffmpeg -i "${fullPath}" -ar 16000 -ac 1 "${wavPath}" -y 2>/dev/null`);
-                  const result = execSync(
-                    `${process.env.WHISPER_BINARY} -m ${process.env.WHISPER_MODEL} -f "${wavPath}" --output-txt 2>/dev/null`,
-                  )
-                    .toString()
-                    .trim();
-                  if (result) content = content ? `${content}\n[Voice: ${result}]` : `[Voice: ${result}]`;
-                } catch (e) {
-                  log.warn('Whisper transcription failed', { err: e });
-                }
-              }
-            }
-
             // Skip empty protocol messages (no text and no attachments)
             if (!content && attachments.length === 0) continue;
 
