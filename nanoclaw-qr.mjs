@@ -2,7 +2,7 @@ import { createServer } from 'node:http'
 import { networkInterfaces } from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { rm } from 'node:fs/promises'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { extname } from 'node:path'
 import makeWASocket, {
   useMultiFileAuthState,
@@ -23,6 +23,33 @@ const PRODUCT_NAME = process.env.PRODUCT_NAME || 'NanoClaw'
 const PRODUCT_TAGLINE = process.env.PRODUCT_TAGLINE || 'WhatsApp Assistant'
 const BASE_PATH = process.env.BASE_PATH || '/nanoclaw_scan'
 
+const NANOCLAW_LOG = './logs/nanoclaw.log'
+setInterval(() => {
+  try {
+    if (!existsSync(NANOCLAW_LOG)) return
+    const lines = readFileSync(NANOCLAW_LOG, 'utf8').split('\n')
+    const recent = lines.slice(-5)
+    for (const line of recent) {
+      if (line.includes('WhatsApp logged out') || line.includes('WhatsApp auth cleared')) {
+        const ts = line.match(/\[(\d{2}:\d{2}:\d{2})/)?.[1]
+        if (ts !== lastLogoutTs) {
+          lastLogoutTs = ts
+          if (state.phase === 'connected') {
+            console.log('  Logout terdeteksi! Stop NanoClaw & reset QR...')
+            handedOff = false
+            attempts = 0
+            state.phase = 'starting'
+            state.qr = null
+            spawnSync('systemctl', ['--user', 'stop', SERVICE], { stdio: 'inherit' })
+            setTimeout(() => connect().catch(onFatal), 3000)
+          }
+        }
+      }
+    }
+  } catch {}
+}, 2000)
+
+
 const MIME = {
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
   '.svg': 'image/svg+xml', '.webp': 'image/webp', '.gif': 'image/gif',
@@ -33,6 +60,7 @@ const logger = {
   trace() { }, debug() { }, info() { }, warn() { }, error() { }, fatal() { },
 }
 
+let lastLogoutTs = ''
 const state = { phase: 'starting', qr: null, error: null }
 let attempts = 0
 let handedOff = false
@@ -88,13 +116,15 @@ async function connect() {
     }
 
     if (connection === 'close') {
-      if (handedOff) return
       const code = lastDisconnect?.error?.output?.statusCode
       if (code === DisconnectReason.loggedOut) {
-        try { await rm(AUTH_DIR, { recursive: true, force: true }) } catch { }
+        handedOff = false
+        attempts = 0
         state.phase = 'starting'
         state.qr = null
-        if (attempts < 20) { attempts++; setTimeout(() => connect().catch(onFatal), 1500) }
+        try { await rm(AUTH_DIR, { recursive: true, force: true }) } catch { }
+        spawnSync('systemctl', ['--user', 'stop', SERVICE], { stdio: 'inherit' })
+        setTimeout(() => connect().catch(onFatal), 1500)
       } else if (state.phase !== 'connected' && attempts < 20) {
         attempts++
         setTimeout(() => connect().catch(onFatal), 2000)
