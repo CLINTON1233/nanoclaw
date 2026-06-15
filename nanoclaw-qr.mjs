@@ -1,16 +1,3 @@
-#!/usr/bin/env node
-/**
- * NanoClaw - Halaman QR WhatsApp 
- * -----------------------------------------------------------------------
- * Alur otomatis:
- *   1. Skrip menghentikan NanoClaw dulu (biar tidak rebutan sesi).
- *   2. Begitu di-scan & "Connected", skrip menutup koneksinya,
- *      menjalankan NanoClaw, lalu keluar sendiri.
- * Jalankan:  node nanoclaw-qr.mjs
- * Buka:      http://<IP-SERVER>:8088/nanoclaw_scan
- * Manual:    AUTO_HANDOFF=0 node nanoclaw-qr.mjs
- */
-
 import { createServer } from 'node:http'
 import { networkInterfaces } from 'node:os'
 import { spawnSync } from 'node:child_process'
@@ -24,7 +11,6 @@ import makeWASocket, {
 } from '@whiskeysockets/baileys'
 import QRCode from 'qrcode'
 
-// ============== KONFIGURASI ==============
 const PORT = Number(process.env.PORT || 8088)
 const HOST = process.env.HOST || '0.0.0.0'
 const AUTH_DIR = process.env.AUTH_DIR || './store/auth'
@@ -35,8 +21,7 @@ const LOGO_PATH = process.env.LOGO_PATH || './seatrium-logo.png'
 const BRAND_NAME = process.env.BRAND_NAME || 'Seatrium'
 const PRODUCT_NAME = process.env.PRODUCT_NAME || 'NanoClaw'
 const PRODUCT_TAGLINE = process.env.PRODUCT_TAGLINE || 'WhatsApp Assistant'
-const BASE_PATH = process.env.BASE_PATH || '/nanoclaw_scan'  // <-- path baru
-// =========================================
+const BASE_PATH = process.env.BASE_PATH || '/nanoclaw_scan'
 
 const MIME = {
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
@@ -93,28 +78,18 @@ async function connect() {
           try { sock.end(undefined) } catch { }
           await sleep(3000)
           console.log('  Menjalankan NanoClaw...')
-          spawnSync('systemctl', ['--user', 'start', SERVICE], {
-            stdio: 'inherit'
-          })
-
-          console.log('  NanoClaw berjalan. Halaman QR ditutup sebentar lagi.')
-          // await sleep(8000)
-          // process.exit(0)
-          await sleep(8000)
-          console.log('NanoClaw berjalan')
+          spawnSync('systemctl', ['--user', 'start', SERVICE], { stdio: 'inherit' })
+          console.log('  NanoClaw berjalan. Halaman QR tetap aktif.')
+          state.phase = 'connected'
         }, 3000)
       } else {
-        console.log('  (mode manual) Tekan Ctrl+C, lalu jalankan NanoClaw.\n')
+        console.log('Tekan Ctrl+C, lalu jalankan NanoClaw.\n')
       }
     }
 
     if (connection === 'close') {
-      if (handedOff) {
-        state.phase = 'connected'
-        return
-      }
+      if (handedOff) return
       const code = lastDisconnect?.error?.output?.statusCode
-
       if (code === DisconnectReason.loggedOut) {
         try { await rm(AUTH_DIR, { recursive: true, force: true }) } catch { }
         state.phase = 'starting'
@@ -158,13 +133,11 @@ const PAGE = `<!DOCTYPE html>
       linear-gradient(180deg,#f6fbff 0%,#eef5fc 100%);
   }
 
-  /* ---- watermark logo di belakang ---- */
   .bg-logo {
     position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
     width:720px; max-width:120vw; opacity:.045; pointer-events:none; z-index:0;
   }
 
-  /* ---- header bar ---- */
   .topbar {
     position:relative; z-index:2; width:100%; padding:16px 26px;
     display:flex; align-items:center;
@@ -176,7 +149,6 @@ const PAGE = `<!DOCTYPE html>
   .bar-title { font-size:16px; font-weight:800; color:var(--blue-deep); letter-spacing:-.3px; line-height:1.1; }
   .bar-sub { font-size:12px; color:var(--muted); margin-top:1px; }
 
-  /* ---- konten ---- */
   .main { position:relative; z-index:1; flex:1; display:flex; align-items:center; justify-content:center; padding:32px 22px; }
   .card {
     position:relative; width:100%; max-width:880px; background:#fff; border-radius:24px;
@@ -193,7 +165,6 @@ const PAGE = `<!DOCTYPE html>
 
   .grid { display:grid; grid-template-columns:1fr 1fr; gap:40px; align-items:center; }
 
-  /* ---- kolom kiri: langkah ---- */
   .col-left { min-width:0; }
   .step { display:flex; gap:14px; margin-bottom:22px; }
   .step:last-child { margin-bottom:0; }
@@ -207,7 +178,6 @@ const PAGE = `<!DOCTYPE html>
     padding:13px 15px; font-size:12.5px; color:#4a6076; line-height:1.55; }
   .note b { color:var(--blue-deep); }
 
-  /* ---- kolom kiri: state sukses ---- */
   .done-block { display:none; }
   .done-block .dt { font-size:20px; font-weight:800; color:var(--blue-deep); margin-bottom:10px; }
   .done-block .dd { font-size:14px; color:var(--muted); line-height:1.6; }
@@ -215,7 +185,6 @@ const PAGE = `<!DOCTYPE html>
     color:var(--green); font-weight:700; font-size:13px; }
   .done-block .dtick svg { width:18px; height:18px; }
 
-  /* ---- kolom kanan: scanner ---- */
   .col-right { display:flex; flex-direction:column; align-items:center; justify-content:center; }
   .qrframe {
     position:relative; display:inline-block; padding:18px; border-radius:22px;
@@ -266,7 +235,6 @@ const PAGE = `<!DOCTYPE html>
   .foot { margin-top:30px; padding-top:18px; border-top:1px solid var(--line);
     text-align:center; font-size:11.5px; color:#9fb0c0; letter-spacing:.2px; }
 
-  /* ---- responsif ---- */
   @media (max-width:760px) {
     .card { padding:30px 22px 22px; }
     .grid { grid-template-columns:1fr; gap:28px; }
@@ -342,7 +310,6 @@ const PAGE = `<!DOCTYPE html>
           </div>
         </div>
 
-        <!-- KANAN: scanner -->
         <div class="col-right">
           <div class="qrframe" id="qrframe">
             <span class="corner tl"></span><span class="corner tr"></span>
@@ -397,34 +364,29 @@ function serveLogo(res) {
 createServer((req, res) => {
   const url = req.url
 
-  // Handle base path + logo
   if (url === `${BASE_PATH}/logo`) {
     serveLogo(res);
     return
   }
 
-  // Handle base path + qr endpoint
   if (url === `${BASE_PATH}/qr`) {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
     res.end(JSON.stringify({ phase: state.phase, qr: state.qr, error: state.error }))
     return
   }
 
-  // Handle base path exactly
   if (url === BASE_PATH || url === `${BASE_PATH}/`) {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
     res.end(PAGE)
     return
   }
 
-  // Handle redirect from root to base path
   if (url === '/' || url === '') {
     res.writeHead(302, { 'Location': BASE_PATH })
     res.end()
     return
   }
 
-  // 404 for other paths
   res.writeHead(404, { 'Content-Type': 'text/plain' })
   res.end('Not Found')
 }).listen(PORT, HOST, () => {
